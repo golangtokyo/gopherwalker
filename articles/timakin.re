@@ -78,7 +78,7 @@ func initHandlers() http.Handler {
 	authDependency := &auth.Dependency{
 		AuthService: authService,
 	}
-    
+
 	r = auth.MakeInitHandler(authDependency, r)
 
 	// Bind middlewares
