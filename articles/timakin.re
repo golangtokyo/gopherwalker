@@ -38,7 +38,7 @@
 
 起動スクリプトは以下のような書き方になると思います。
 
-```
+//list[main.go][起動スクリプトの例]{
 package main
 
 import (
@@ -86,7 +86,7 @@ func initHandlers() http.Handler {
 
 	return h
 }
-```
+//}
 
 appengine特有のpackageが一部読み込まれていますが、基本的な書き方は変わりません。
 
@@ -104,7 +104,7 @@ appengine特有のpackageが一部読み込まれていますが、基本的な�
 
 この節ではハンドラについて述べていきます。まずはカスタムハンドラの定義です。
 
-```
+//list[handler.go][カスタムハンドラの定義]{
 package auth
 
 import (
@@ -134,7 +134,7 @@ func (h CustomHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	cr := r.WithContext(ctx)
 	h.Impl(w, cr)
 }
-```
+//}
 
 === なぜカスタムハンドラが必要か
 
@@ -168,7 +168,7 @@ CustomHandlerがその実装例になります。このstructはServeHTTPメソ�
 
 今回はPOSTリクエストとの/initというエンドポイントを、初期の認証処理の入り口としておいて見ます。
 
-```
+//list[routing.go][ルーティング]{
 package auth
 
 import "github.com/gorilla/mux"
@@ -179,13 +179,13 @@ func MakeInitHandler(d *Dependency, r *mux.Router) *mux.Router {
 	r.Handle("/api/init", initHandler).Methods("POST")
 	return r
 }
-```
+//}
 
 冒頭でルーティング定義を別メソッドに切り出して置くと見栄えが良い的な話をしましたが、ここがその実装です。
 
 カスタムハンドラでラップしつつ、実際のリクエストハンドラに引き渡します。その実際のリクエストハンドラが次の通りです。
 
-```
+//list[handler.go][実際にリクエストを処理するハンドラ]{
 package auth
 
 import (
@@ -268,7 +268,7 @@ func encodeInitResponse(userID int64, isNewUser bool, at string) *InitResponsePa
 	}
 	return &payload
 }
-```
+//}
 
 受け取ったInit用のリクエストbodyをパースして、ビジネスロジックへの流し込みます。そして結果をレスポンスpayloadに詰めて返却する、というのがおおまかな流れです。
 
@@ -295,7 +295,7 @@ func encodeInitResponse(userID int64, isNewUser bool, at string) *InitResponsePa
 
 JWTをAccessTokenという値で返却する、と上述しましたが、その値は以下のような場面で利用します。
 
-```
+//list[middleware.go][認証用のミドルウェア]{
 package middleware
 
 import (
@@ -353,7 +353,7 @@ func Authenticator(next http.Handler) http.Handler {
 		next.ServeHTTP(w, cr)
 	})
 }
-```
+//}
 
 このコードはmiddlewareの関数として定義されたもので、リクエストのたびに呼ばれますが、その役割は「init以外のリクエストではJWTの値を検証して、妥当なユーザーかどうかvalidateする」ということです。
 
@@ -365,7 +365,7 @@ Goではmiddlewareの関数を使ってこのように認証済みユーザー�
 
 認証に必要になる構造体の定義としては、以下のようなものがあります。
 
-```
+//list[user.go][構造体定義]{
 // User ... エンドユーザー
 type User struct {
 	ID        int64   `json:"id" datastore:"-" goon:"id"`
@@ -401,7 +401,7 @@ type DeviceApp struct {
 	CreatedAt     int64  `json:"created_at"        validate:"created_at"`
 	UpdatedAt     int64  `json:"updated_at"        validate:"updated_at"`
 }
-```
+//}
 
 基本的なユーザー情報を表すUser、利用端末の情報を表したDevice、さらにそれにインストールされたDeviceAppという情報で構成します。
 
@@ -413,7 +413,7 @@ DeviceAppというのは、多くの場合Deviceに含めてしまっていい�
 
 実際のビジネスロジックはServiceという構造体が持っているというのを前述しましたが、以下がその実装です。
 
-```
+//list[service.go][認証ロジックの実装]{
 type Service interface {
 	Init(ctx context.Context, u *User) (*User, bool, string, error)
 }
@@ -516,7 +516,7 @@ func (s service) Init(ctx context.Context, u *User) (*User, bool, string, error)
 
 	return user, u.IsNew, sJWT, nil
 }
-```
+//}
 
 Initという必要の関数の中でUser, Device, DeviceAppを登録していきます。今回はGoogle Cloud PlatformのDatastoreをデータベースとして利用しているので、RunInTransaction という関数でトランザクションを張っています。
 
@@ -530,7 +530,7 @@ Initという必要の関数の中でUser, Device, DeviceAppを登録してい�
 
 いわゆるデータアクセスするレイヤーの書き方はシンプルです。当該処理はサービスの処理の中から呼ばれます。 
 
-```
+//list[repository.go][データアクセスを担うリポジトリ層の実装]{
 func (repo authRepository) UpsertUser(ctx context.Context, u *auth.User) (*auth.User, error) {
 	g := goon.FromContext(ctx)
 	if _, err := g.Put(u); err != nil {
@@ -538,7 +538,7 @@ func (repo authRepository) UpsertUser(ctx context.Context, u *auth.User) (*auth.
 	}
 	return u, nil
 }
-```
+//}
 
 Datastoreの場合、MySQLなどとは違い値にKeyという識別子が必要になってきますが、その発行処理をいちいち書いていたら面倒です。
 
