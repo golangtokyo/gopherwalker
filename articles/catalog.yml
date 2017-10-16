@@ -2,5 +2,6 @@ PREDEF:
   - preface.re
 CHAPS:
   - tenntenn.re
+  - timakin.re
 POSTDEF:
   - contributors.re
