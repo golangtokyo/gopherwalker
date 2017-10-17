@@ -185,7 +185,8 @@ import (
 func (d *Dependency) InitHandler(w http.ResponseWriter, r *http.Request) {
 	payload, err := decodeInitRequest(r)
 	if err != nil {
-		err = errors.Wrap(err, "Failed to parse auth params from path components.")
+		msg := "Failed to parse auth params from path components."
+		err = errors.Wrap(err, msg)
 		res := handler.NewErrorResponse(http.StatusBadRequest, err.Error())
 		handler.Redererer.JSON(w, res.Status, res)
 		return
@@ -203,7 +204,8 @@ func (d *Dependency) InitHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		res := handler.NewErrorResponse(http.StatusInternalServerError, err.Error())
+		status := http.StatusInternalServerError
+		res := handler.NewErrorResponse(status, err.Error())
 		handler.Redererer.JSON(w, res.Status, res)
 		return
 	}
@@ -214,12 +216,12 @@ func (d *Dependency) InitHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type InitRequestPayload struct {
-	DUID       string `json:"duid" 		  validate:"required"`
-	AppVersion string `json:"app_version" validate:"required"`
-	BundleID   string `json:"bundle_id"   validate:"required"`
-	Device     string `json:"device" 	  validate:"required"`
-	OS         string `json:"os" 		  validate:"required"`
-	OSVersion  string `json:"os_version"  validate:"required"`
+	DUID       string `json:"duid"		validate:"required"`
+	AppVersion string `json:"app_version"	validate:"required"`
+	BundleID   string `json:"bundle_id"	validate:"required"`
+	Device     string `json:"device"	validate:"required"`
+	OS         string `json:"os"		validate:"required"`
+	OSVersion  string `json:"os_version"	validate:"required"`
 }
 
 func decodeInitRequest(r *http.Request) (*InitRequestPayload, error) {
@@ -245,10 +247,10 @@ type InitResponsePayload struct {
 	AccessToken string  `json:"access_token"`
 }
 
-func encodeInitResponse(userID int64, isNewUser bool, at string) *InitResponsePayload {
+func encodeInitResponse(uID int64, nu bool, at string) *InitResponsePayload {
 	payload := InitResponsePayload{
-		UserID:      userID,
-		IsNewUser:   isNewUser,
+		UserID:      uID,
+		IsNewUser:   nu,
 		AccessToken: at,
 	}
 	return &payload
@@ -323,7 +325,8 @@ func Authenticator(next http.Handler) http.Handler {
 
         // 認証処理が不要なホワイトリストを除外
 		for i := range whiteList {
-			if ok, _ := regexp.MatchString(whiteList[i].Path, r.URL.Path); ok && r.Method == whiteList[i].Method {
+			ok, _ := regexp.MatchString(whiteList[i].Path, r.URL.Path)
+			if ok && r.Method == whiteList[i].Method {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -333,7 +336,8 @@ func Authenticator(next http.Handler) http.Handler {
 		token, err := at.ValidateFromRequest(r)
 		if err != nil {
 			err = errors.Wrap(err, fmt.Sprintf("Invalid JWT"))
-			res := handler.NewErrorResponse(http.StatusUnauthorized, err.Error())
+			status := http.StatusUnauthorized
+			res := handler.NewErrorResponse(status, err.Error())
 			handler.Redererer.JSON(w, res.Status, res)
 			return
 		}
@@ -375,12 +379,12 @@ type Device struct {
 	DeviceName   string     `json:"device_name"    validate:"device_name"`
 	CreatedAt    int64      `json:"created_at"     validate:"created_at"`
 	UpdatedAt    int64      `json:"updated_at"     validate:"updated_at"`
-	DeviceApp    *DeviceApp `json:"device_app"     validate:"device_app" datastore:"-"`
+	DeviceApp    *DeviceApp `json:"device_app"     validate:"device_app"`
 }
 
 // DeviceApp ... アプリ
 type DeviceApp struct {
-	ID            int64  `json:"id"                validate:"id" datastore:"-" goon:"id"`
+	ID            int64  `json:"id"                datastore:"-" goon:"id"`
 	DeviceID      int64  `json:"device_id"         validate:"device_id"`
 	BundleID      string `json:"bundle_id"         validate:"bundle_id"`
 	AppVersion    string `json:"app_version"       validate:"app_version"`
@@ -423,7 +427,8 @@ func (s service) Init(ctx context.Context, u *User) (*User, bool, string, error)
 	if err != nil {
 		if err == ErrResourceNotFound {
 			err = nil
-			err := datastore.RunInTransaction(ctx, func(tc context.Context) error {
+			err := datastore.RunInTransaction(ctx, 
+					func(tc context.Context) error {
 				now := time.Now().Unix()
 				u.Enabled = true
 				u.CreatedAt = now
@@ -448,7 +453,8 @@ func (s service) Init(ctx context.Context, u *User) (*User, bool, string, error)
 				}
 				user.Device = d
 
-				appVerNum, err := VerStrToInt(u.Device.DeviceApp.AppVersion)
+				appVer := u.Device.DeviceApp.AppVersion
+				appVerNum, err := VerStrToInt(appVer)
 				if err != nil {
 					return err
 				}
@@ -456,7 +462,8 @@ func (s service) Init(ctx context.Context, u *User) (*User, bool, string, error)
 				u.Device.DeviceApp.CreatedAt = now
 				u.Device.DeviceApp.UpdatedAt = now
 				u.Device.DeviceApp.AppVersionNum = appVerNum
-				da, err := s.repo.UpsertDeviceApp(tc, u.Device.DeviceApp)
+				dapp := u.Device.DeviceApp
+				da, err := s.repo.UpsertDeviceApp(tc, dapp)
 				if err != nil {
 					return err
 				}
@@ -514,7 +521,8 @@ func (s service) Init(ctx context.Context, u *User) (*User, bool, string, error)
 いわゆるデータアクセスするレイヤーの書き方はシンプルで、@<list>{repository.go}のようになります。当該処理はサービスの処理の中から呼ばれます。 
 
 //list[repository.go][データアクセスを担うリポジトリ層の実装]{
-func (repo authRepository) UpsertUser(ctx context.Context, u *auth.User) (*auth.User, error) {
+func (repo authRepository) UpsertUser(ctx context.Context, u *auth.User) 
+		(*auth.User, error) {
 	g := goon.FromContext(ctx)
 	if _, err := g.Put(u); err != nil {
 		return nil, err
