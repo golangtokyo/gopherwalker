@@ -2,16 +2,13 @@
 
 == はじめに
 
-初めまして、株式会社Gunosyの新規事業開発室でエンジニアをしております、timakinです。Gunosyでは主にGoのAPIとSwiftのiOSクライアントサイド開発を担当しております。
+株式会社Gunosy新規事業開発室エンジニアのtimakinです。Gunosyでは主にGoのAPIとSwiftのiOSクライアントサイド開発を担当しております。
 
-弊社のプロダクトもそうですが、モバイルアプリでは起動直後に一見特段の認証処理をせずにコンテンツを表示します。
+起動直後に特にユーザの認証を必要としないモバイルアプリは多く存在しています。
+しかし、裏側ではデバイス認証をしておき、正確にユーザ情報を管理しなくてはならない場合があります。
 
-しかし、裏側ではデバイス認証をしておき、正確にユーザー情報を管理しなければならない場合というのがあります。
-
-この章では、上記のようなGoをモバイルファーストのプロダクトで用いる際の実装方法について書いていこうと思います。
-
-なお、今回対象とするのはOAuth認証などではなく、より単純なデバイスの認証とします。
-
+本章では、モバイルファーストなプロダクトにおいて、このような認証処理をGoで実装する方法について、Gunosyの実例を踏まえて解説します。
+なお、本章で対象とするのはOAuth認証などではなく、より単純なデバイスの認証とします。
 また、環境はGoogle App Engineで用意し、Goのバージョンは1.8とします。
 
 == 認証処理で必要なこと
@@ -27,23 +24,19 @@
  * 取得したユーザー情報をJWTとしてシリアライズ
 
 これらを全て一つのリクエストのうちに済ませようとすると、REST APIを提供していても、このリクエストのみJSON-RPCといっても差し支えないほどに込み入った処理をすることになります。
-
 さらには、そういった処理の中ではトランザクションを適切に張る必要もあり、他のリソース返却のAPIよりも難易度が上がります。
+プロダクトが成長するにつれ、チュートリアル処理やキャンペーン情報など、様々な情報をこの認証処理のレスポンスペイロードに入れ始め、混沌としたAPIが出来上がります。
 
-プロダクトが成長するにつれ、チュートリアル処理やキャンペーン情報など、様々な情報をこの初期化処理のレスポンスペイロードに入れ始め、混沌としたAPIが出来上がると思います。
+今回はプロダクトのフェーズがその段階に達する前の、シンプルなデバイス認証をどうやってGoで実装すべきかについて書いていきます。
 
-今回はそこまでいく前の、シンプルなデバイス認証をどうやってGoで実装すべきかについて考えてみます。
+== 起動スクリプトの書き方
 
-== main.go
-
-起動スクリプトは@<list>{main.go}のような書き方になると思います。
+起動スクリプトは@<list>{main.go}のような書き方になります。
 
 //list[main.go][起動スクリプトの例]{
 package main
 
 import (
-	_ "google.golang.org/appengine/remote_api"
-
 	"net/http"
 
 	"github.com/fukata/golang-stats-api-handler"
@@ -52,6 +45,7 @@ import (
 	"github.com/timakin/sample_api/services/api/src/domain/auth"
 	"github.com/timakin/sample_api/services/api/src/middleware"
 	"github.com/timakin/sample_api/services/api/src/repository"
+	_ "google.golang.org/appengine/remote_api"
 )
 
 func init() {
@@ -60,19 +54,19 @@ func init() {
 }
 
 func initHandlers() http.Handler {
-	// Routing
+	// ルーティング
 	r := mux.NewRouter()
 
-	// middleware chain
+	// リクエスト処理で使うミドルウェア
 	chain := alice.New(
 		middleware.AccessControl,
 		middleware.Authenticator,
 	)
 
-	// cpu, memory, gc, etc stats
+	// CPUやメモリ使用量などのstatsを返却
 	r.HandleFunc("/api/stats", stats_api.Handler)
 
-	// Authentication Service
+	// 認証処理関連の構造体を初期化
 	authRepository := repository.NewAuthRepository()
 	authService := auth.NewService(authRepository)
 	authDependency := &auth.Dependency{
@@ -81,26 +75,24 @@ func initHandlers() http.Handler {
 
 	r = auth.MakeInitHandler(authDependency, r)
 
-	// Bind middlewares
+	// ハンドラにミドルウェアをbindする
 	h := chain.Then(r)
 
 	return h
 }
 //}
 
-appengine特有のpackageが一部読み込まれていますが、基本的な書き方は変わりません。
-
+Google App Engine特有のpackageが一部読み込まれていますが、基本的な書き方は変わりません。
 特筆すべき点としては、
 
  * @<code>{MakeInitHandler}という関数でルーティング定義
- * Repository, Serviceなどを依存オブジェクトとしてカスタムハンドラに注入している
- * 認証処理をauthというpackageにまとめている
+ * @<code>{Repository}, @<code>{Service}などを依存オブジェクトとしてカスタムハンドラに注入している
+ * 認証処理を@<code>{auth}というパッケージにまとめている
 
 という点でしょうか。ひとつめはルーティングの定義を外部の関数に切り出しておくというだけなのですが、見栄えが良いので個人的にオススメです。
-
 ふたつめは、Goのリクエストハンドラの実装方法です。この点は次の節で詳しく解説いたします。
 
-== ハンドラ
+== カスタムハンドラとルーティング定義
 
 この節ではハンドラについて述べていきます。カスタムハンドラの定義は@<list>{custom.go}のように行います。 
 
@@ -140,39 +132,34 @@ func (h CustomHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 そもそもなぜカスタムハンドラの定義をする必要があるのでしょうか？これはGo特有の話になってきます。
 
 Goの起動スクリプトで初期化されたミドルウェア(LoggerやDBクライアントなど)は、できることなら各リクエストで使いまわしたいところです。
-
-特に気にせず書いてしまうと、packageのグローバル変数として定義したオブジェクトを使ったり、リクエストごとにLoggerを初期化、などとなります。
+特に気にせず書いてしまうと、パッケージのグローバル変数として定義したオブジェクトを使ったり、リクエストごとにLoggerを初期化、などとなります。
 
 それはあまりよろしくないので、Goのインタフェースを使って、それらのミドルウェアのオブジェクトを@<code>{Dependency}(依存オブジェクト)として持ったハンドラを作成すると便利です。
-
 @<code>{CustomHandler}がその実装例になります。この構造体は@<code>{ServeHTTP}メソッドを実装しています。これを実装すればGoはHTTPリクエストハンドラとしてみなしてくれます。
 
 ここでは、認証情報へのデータアクセスクライアントなどを持った@<code>{Repository}オブジェクト、をさらに内部に持ったビジネスロジックを実装した@<code>{Service}構造体、を持った@<code>{Dependency}という、ちょっと入れ子構造として多層なオブジェクトを持ったハンドラを認証処理に使います。
 
-=== contextについて
+=== Goのcontextについて
 
-さらに、Goのcontextという概念がよく実装で問題になります。これはGoのchannel間でキャンセル処理を統一管理する用途、そしてリクエストに限定的な値(ユーザー情報など)をストアするための用途で使われる機構です。
-
+さらに、Goの@<code>{context}という概念がよく実装で問題になります。これはGoのゴールーチン間でキャンセル処理を統一管理する用途、そしてリクエストに限定的な値(ユーザー情報など)をストアするための用途で使われる機構です。
 主にハンドラでどう関係するかといえば、タイムアウト処理で関係してきます。
 
 リクエストがタイムアウトした時に、張ってるトランザクションをキャンセルしつつエラーレスポンスを返さなければなりません。
-
-まさにこのような用途でcontextを使います。例えばDBクライアントに実行メソッドとして@<code>{Exec}というのが用意されていれば、標準パッケージならほぼ確実に@<code>{ExecContext}というような、第一引数にcontextを渡せるメソッドが生えています。
-
+まさにこのような用途で@<code>{context}を使います。例えばDBクライアントに実行メソッドとして@<code>{Exec}というのが用意されていれば、標準パッケージならほぼ確実に@<code>{ExecContext}というような、第一引数にcontextを渡せるメソッドが生えています。
 これがあれば、タイムアウトと同時にトランザクション処理をキャンセルしたりできます。
 
-なのでタイムアウト設定としてcontextをどこかで設定すべきなのですが、今回は@<code>{ServeHTTP}の中で設定することとします。
+なのでタイムアウト設定として@<code>{context}をどこかで設定すべきなのですが、ここでは@<code>{ServeHTTP}の中で設定することとします。
 
-=== ルーティング
+=== 認証処理のエンドポイント用ルーティング定義
 
-今回はPOSTリクエストとの/initというエンドポイントを、初期の認証処理の入り口としておいて見ます。
+今回はPOSTリクエストとの@<code>{/api/init}というエンドポイントを、初期の認証処理の入り口として置いてみます。
 
-//list[routing.go][ルーティング]{
+//list[routing.go][認証処理用のルーティング定義]{
 package auth
 
 import "github.com/gorilla/mux"
 
-// MakeInitHandler ... register handlers for initialization
+// MakeInitHandler ... 認証処理に関するルーティング定義
 func MakeInitHandler(d *Dependency, r *mux.Router) *mux.Router {
 	initHandler := CustomHandler{Impl: d.InitHandler}
 	r.Handle("/api/init", initHandler).Methods("POST")
@@ -181,7 +168,6 @@ func MakeInitHandler(d *Dependency, r *mux.Router) *mux.Router {
 //}
 
 冒頭でルーティング定義を別メソッドに切り出して置くと見栄えが良い的な話をしましたが、ここがその実装です。
-
 カスタムハンドラでラップしつつ、実際のリクエストハンドラに引き渡します。その実際のリクエストハンドラが@<list>{handler.go}です。
 
 //list[handler.go][実際にリクエストを処理するハンドラ]{
@@ -194,7 +180,7 @@ import (
 	"github.com/timakin/sample_api/services/api/src/handler"
 )
 
-// InitHandler ... user registration and returns userInfo payload
+// InitHandler ...  アプリ起動時の認証処理を行うハンドラ
 // Path: /init
 func (d *Dependency) InitHandler(w http.ResponseWriter, r *http.Request) {
 	payload, err := decodeInitRequest(r)
@@ -228,12 +214,12 @@ func (d *Dependency) InitHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type InitRequestPayload struct {
-	DUID       string `json:"duid" validate:"required"`
+	DUID       string `json:"duid" 		  validate:"required"`
 	AppVersion string `json:"app_version" validate:"required"`
-	BundleID   string `json:"bundle_id" validate:"required"`
-	Device     string `json:"device" validate:"required"`
-	OS         string `json:"os" validate:"required"`
-	OSVersion  string `json:"os_version" validate:"required"`
+	BundleID   string `json:"bundle_id"   validate:"required"`
+	Device     string `json:"device" 	  validate:"required"`
+	OS         string `json:"os" 		  validate:"required"`
+	OSVersion  string `json:"os_version"  validate:"required"`
 }
 
 func decodeInitRequest(r *http.Request) (*InitRequestPayload, error) {
@@ -269,28 +255,32 @@ func encodeInitResponse(userID int64, isNewUser bool, at string) *InitResponsePa
 }
 //}
 
-受け取ったInit用のリクエストbodyをパースして、ビジネスロジックへの流し込みます。そして結果をレスポンスpayloadに詰めて返却する、というのがおおまかな流れです。
+受け取った@<code>{Init}用のリクエストボディをパースして、ビジネスロジックへの流し込みます。そして結果をレスポンスペイロードに詰めて返却する、というのがおおまかな流れです。
+リクエストボディとしてモバイルクライアント側が送信する値は、@<table>{userinfo}の通りです。
 
-リクエストbodyとしてモバイルクライアント側が送信する値としては、
+//table[userinfo][主に認証に使う値の表]{
+-------------------------
+DUID		デバイスのユニークID
+AppVersion	クライアントにインストールされているアプリバージョン
+BundleID	上記と一緒にクライアントに定義されるであろうBundleID
+Device 		デバイス名
+OS 			OS種別
+OSVersion 	OSのバージョン 
+//}
 
- * DUID - デバイスのユニークID
- * AppVersion - クライアントにインストールされているアプリバージョン
- * BundleID - 上記と一緒にクライアントに定義されるであろうBundleID
- * Device - デバイス名
- * OS - OS種別
- * OSVersion - OSのバージョン 
+などです。広告の配信機構などを実装する場合はもう少し追加の値を追加する必要がありますが、プレーンな実装だとこの程度でできます。
+また、返却されるペイロードは、@<table>{respayload}の通りです。
 
-などです。広告の配信機構などを実装する場合はもう少しoptionalな値を追加する必要がありますが、プレーンな実装だとこの程度でできると思います。
-
-また、返却されるpayloadとしては、
-
- * UserID - ユーザーID
- * IsNewUser - 新規ユーザーフラグ
- * AccessToken - 認証後のAPIリクエストでバリデーションに使うJWT
+//table[respayload][認証結果のペイロードの表]{
+-------------------------
+UserID			ユーザーID
+IsNewUser		新規ユーザーフラグ
+AccessToken		認証後のAPIリクエストでバリデーションに使うJWT
+//}
 
 などが要素として入ってきます。IDと新規ユーザーフラグは、ログやチュートリアル実装でよく使うので、そのまま返却してしまいます。ユーザー名などが必要な場合は、別途JWTから引き出すことも可能です。
 
-=== init以外での非認証済みユーザーの除外
+=== 認証していないユーザーからのリクエストを禁止する
 
 JWTをAccessTokenという値で返却する、と上述しましたが、その値は@<list>{middleware.go}のような場面で利用します。
 
@@ -331,7 +321,7 @@ func Authenticator(next http.Handler) http.Handler {
 			}
 		}
 
-        // whiteListという配列にpathの
+        // 認証処理が不要なホワイトリストを除外
 		for i := range whiteList {
 			if ok, _ := regexp.MatchString(whiteList[i].Path, r.URL.Path); ok && r.Method == whiteList[i].Method {
 				next.ServeHTTP(w, r)
@@ -354,11 +344,9 @@ func Authenticator(next http.Handler) http.Handler {
 }
 //}
 
-このコードはmiddlewareの関数として定義されたもので、リクエストのたびに呼ばれますが、その役割は「init以外のリクエストではJWTの値を検証して、妥当なユーザーかどうかvalidateする」ということです。
-
-認証処理というのは、デバイスの登録・更新に加えて、認証後に発行されたtokenを用いてAPIを許可されたユーザーだけが呼べるようにする、という一連の流れを指します。
-
-Goではmiddlewareの関数を使ってこのように認証済みユーザー以外を弾くのが望ましいです。
+このコードはミドルウェアの関数として定義されたもので、リクエストのたびに呼ばれますが、その役割は「@<code>{init}以外のリクエストではJWTの値を検証して、妥当なユーザーかどうか検証する」ということです。
+認証処理というのは、デバイスの登録・更新に加えて、認証後に発行されたトークンを用いてAPIを許可されたユーザーだけが呼べるようにする、という一連の流れを指します。
+Goではミドルウェアの関数を使ってこのように認証済みユーザー以外を弾くのが望ましいです。
 
 == 必要なデータ定義
 
@@ -367,12 +355,12 @@ Goではmiddlewareの関数を使ってこのように認証済みユーザー�
 //list[user.go][構造体定義]{
 // User ... エンドユーザー
 type User struct {
-	ID        int64   `json:"id" datastore:"-" goon:"id"`
+	ID        int64   `json:"id" 		  datastore:"-" goon:"id"`
 	CreatedAt int64   `json:"created_at"`
 	UpdatedAt int64   `json:"updated_at"`
 	Enabled   bool    `json:"enabled"`
-	IsNew     bool    `json:"is_new" datastore:"-"`
-	Device    *Device `json:"device" datastore:"-"`
+	IsNew     bool    `json:"is_new" 	  datastore:"-"`
+	Device    *Device `json:"device" 	  datastore:"-"`
 }
 
 // Device ... ユーザーの利用端末
@@ -403,12 +391,10 @@ type DeviceApp struct {
 //}
 
 基本的なユーザー情報を表す@<code>{User}、利用端末の情報を表した@<code>{Device}、さらにそれにインストールされた@<code>{DeviceApp}という情報で構成します。
-
 @<code>{DeviceApp}というのは、多くの場合Deviceに含めてしまっていい情報もありますが、たまにこのように一つの端末に複数の同一アプリがインストールされることがあります。
+現にGunosyではプリインストールユーザーなどでユーザー情報の上書きを防ぐために@<code>{DeviceApp}というところにアプリ情報を正規化して切り出すことで、そのバグを防いでいました。
 
-現に弊社ではプリインストールユーザーなどでユーザー情報の上書きを防ぐために@<code>{DeviceApp}というところにアプリ情報を正規化して切り出すことで、そのバグを防いでいました。
-
-== ビジネスロジック
+== 認証のビジネスロジックの実装
 
 実際のビジネスロジックは@<code>{Service}という構造体が持っているというのを前述しましたが、@<list>{service.go}がその実装です。
 
@@ -517,15 +503,13 @@ func (s service) Init(ctx context.Context, u *User) (*User, bool, string, error)
 }
 //}
 
-Initという必要の関数の中で@<code>{User}, @<code>{Device}, @<code>{DeviceApp}を登録していきます。今回はGoogle Cloud PlatformのDatastoreをデータベースとして利用しているので、@<code>{RunInTransaction}という関数でトランザクションを張っています。
-
+@<code>{Init}という必要の関数の中で@<code>{User}, @<code>{Device}, @<code>{DeviceApp}を登録していきます。今回はGoogle Cloud PlatformのDatastoreをデータベースとして利用しているので、@<code>{RunInTransaction}という関数でトランザクションを張っています。
 不恰好かもしれませんが、認証処理のように複数のテーブルを一挙に参照するような場面では、必ずトランザクションを張るべきです。
 
 また、ここでは省略していますが、バージョン番号が古すぎる場合は強制アップデートフラグをつけるなどの処理もここで必要になってくるでしょう。
+ユーザー情報を抜き取ったあとは、@<code>{User}構造体に用意したトークン化のメソッドなどでデータをシリアライズします。
 
-ユーザー情報を抜き取ったあとは、User構造体に用意したAccessToken化メソッドなどでデータをシリアライズします。
-
-== リポジトリ
+== リポジトリ経由でユーザーを登録する
 
 いわゆるデータアクセスするレイヤーの書き方はシンプルで、@<list>{repository.go}のようになります。当該処理はサービスの処理の中から呼ばれます。 
 
@@ -539,18 +523,15 @@ func (repo authRepository) UpsertUser(ctx context.Context, u *auth.User) (*auth.
 }
 //}
 
-Datastoreの場合、MySQLなどとは違い値にKeyという識別子が必要になってきますが、その発行処理をいちいち書いていたら面倒です。
-
-ここではGoogle App Engineユーザー向けに最適化されたgoonというpackageを使いますが、他にも自前でラップするなどして、使いやすいクライアントを模索すべきです。
+Datastoreの場合、MySQLなどとは違い値に@<code>{Key}という識別子が必要になってきますが、その発行処理をいちいち書いていたら面倒です。
+ここではGoogle App Engineユーザー向けに最適化された@<code>{goon}というパッケージを使いますが、他にも自前でラップするなどして、使いやすいクライアントを模索すべきです。
 
 また、Google App Engine向けと書きましたが、App Engine以外からのDatastore利用の場合都合のいいパッケージがなかったので、筆者は@<code>{timakin/gosto}というgoonと同様の処理をApp Engine以外からのCloud API呼び出しでできるようにしたものを作成しました。
 
 == おわりに
 
 上記のようにつらつらとコードとその補足を書いてきましたが、認証処理は通常のロジックとは違い、入り組んだデータ構造とトランザクション処理が必要になります。
-
-書いたようなGoのcontextのような機構を使えばだいぶ楽にキャンセル処理をハンドリングできます。
-
+書いたようなGoの@<code>{context}のような機構を使えばだいぶ楽にキャンセル処理をハンドリングできます。
 JWTなどを容易に扱えるパッケージなども揃っているので、モバイル向けAPIとしてGoを採用し、認証処理を書く場面があれば、ぜひ今回の実装の一部だけでもご参考いただければと思います。
 
 
