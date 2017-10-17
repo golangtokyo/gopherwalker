@@ -1,0 +1,367 @@
+= Protocol Buffers
+
+== はじめに
+ピックアップ株式会社で新規事業のサーバイサイドエンジニアをしている@sonatardです。
+
+先日、新規事業を始める関係でいくつかの技術スタックの選定を行いましたので、
+今回はその中でもクライアントとサーバ間でやりとりする構造化データの仕様として規定されているProtocol Buffersと周辺技術について紹介します。
+
+== Protocol Buffersの概要
+
+=== Protocol Buffersとは
+
+Protocol Buffersは、言語とプラットフォームに依存しない構造化されたデータをシリアライズするためのものです。
+XMLはより小さく、より速く、よりシンプルです。データを一度に構造化する方法を定義してから、特別に生成されたソースコードを使用して、
+様々なデータストリームとさまざまな言語を使用して構造化データを簡単に書き込んで読み込むことができます。
+
+Protocol Buffersは .proto という拡張子のファイルに所定の書式でデータ構造を規定することができます。
+protocコマンドにより `.proto` ファイルから各言語のソースコードを生成します。
+iOS、Andoird、Webはこれらの自動生成されたソースコードを組み込んで開発をします。
+
+=== メリット
+==== 開発効率
+最大のメリットはクライアントとサーバの間で言語に依存せずコンパイルが可能になることです。
+JSONを利用する場合はサーバの提供するAPI仕様をドキュメントから理解して、クライアントエンジニアが正しく実装しなければなりません。
+もし間違った実装をしても実際にリクエストを送信して結果を見ないことには正しさを検証することができません。
+しかしProtocol Buffersではprotoファイルという共通仕様からクライアントとサーバのコードを生成し、それを利用することでコンパイル時にバグを発見することができます。
+
+またソースコードが生成されることで、各言語のIDEやエディタにより補完が効くようになるため開発効率が向上します。
+
+==== 実行速度
+バイナリフォーマットであるため通信経路上を流れるデータサイズが小さくなり、スループットが向上します。
+またJSONなどのテキストのフォーマットと比較して、バイナリフォーマットであるProtocol Buffersはエンコード、デコードの処理が高速です。
+
+=== デメリット
+==== 環境構築
+言語ごとに環境構築が必要です。
+公式のprotocコマンドだけではすべての言語に対応していないため3rd party製のツールをインストールする必要があります。
+しかし難しいことではないためデメリットというほどのことでもありません。
+
+==== デバッグ
+バイナリフォーマットであるため、JSONのように気軽にcurlコマンドでPOSTを投げるようなことができません。
+サーバ側で工夫してJSONもデコードできるようにしておくと従来通りの開発が可能です。
+
+私たちはPostmanを利用してAPIを実行できる環境をクライアントエンジニアと共有しているため、
+サーバでHTTPヘッダのContent-TypeからJSONかProtocol Buffersかを判断してデコードするようにしています。
+GRPCを利用していればgrpc-gatewayを使う解決策もあります。
+
+
+=== Protocol Buffersを用いた開発
+
+続いて実際にGoでProtocol Buffersを利用した開発を紹介します。
+
+protoファイルを定義して、生成したコードをの構造体をGoから利用してする例を紹介します。
+
+//list[person.proto][protoファイルの例]{
+syntax = "proto3";
+
+message Person {
+  required string name = 1;
+  required int32 id = 2;
+  optional string email = 3;
+}
+//}
+
+//list[protoc_person.proto][protoファイルからのソースコード生成するコマンド]{
+$ protoc --go_out=. person.proto
+$ ls
+person.pb.go  person.proto
+//}
+
+生成された `person.pb.go` を利用してコードを書きます。
+
+//list[directory][サンプルディレクトリ構成]{
+${GOPATH}/github.com/sonatard/proto
+├── Makefile
+├── main
+│   └── main.go
+├── person.pb.go
+└── person.proto
+//}
+
+
+//list[main.go][生成されたperson.Personの利用]{
+package main
+
+import (
+	"fmt"
+	"github.com/sonatard/proto"
+)
+
+func main() {
+	p := person.Person{
+		Name:  "sonatard",
+		Id:    12345,
+		Email: "sonatard@example.com",
+	}
+	fmt.Printf("%#v", p)
+}
+//}
+
+//list[person.proto_stdout][生成されたperson.Personの利用 実行結果]{
+person.Person{Name:"sonatard", Id:12345, Email:"sonatard@example.com"}
+//}
+
+
+続いてクライアント側でprotoファイルで定義した構造化データをエンコードしてHTTPで送信、サーバ側で受信してデコードをする例を紹介します。
+
+//list[main2.go][生成されたperson.Personのエンコードとデコード]{
+func main() {
+	// サーバ
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Failed to read body", http.StatusBadRequest)
+			return
+		}
+
+		var p person.Person
+		err = proto.Unmarshal(body, &p)
+		if err != nil {
+			http.Error(w, "Failed to unmarshal body", http.StatusBadRequest)
+		}
+		fmt.Fprintf(w, "#%v", p)
+	}
+
+	http.HandleFunc("/", handler)
+	go http.ListenAndServe(":8080", nil)
+
+	// クライアント
+	p := person.Person{
+		Name:  "sonatard",
+		Id:    12345,
+		Email: "sonatard@example.com",
+	}
+	pbytes, err := proto.Marshal(&p)
+	if err != nil {
+		fmt.Errorf("%#v", err)
+	}
+	resp, err := http.Post("http://localhost:8080/", "application/x-protobuf", bytes.NewBuffer(pbytes))
+	if err != nil {
+		fmt.Errorf("%#v", err)
+	}
+
+	io.Copy(os.Stdout, resp.Body)
+}
+//}
+
+
+見ていただいた通りGoを書く上ではJSONとProtocolBuffersの違いは、
+構造体にjsonタグを指定するか、protoファイルから構造体を生成するという違いしかありません。
+
+=== GoとProtocol Buffersの型の対応
+
+Goの型とProtocol Buffersの型の名称が異なります。
+代表的な型の対応を紹介します。
+
+//table[identifier][GoとProtocol Buffersの型の対応]{
+Go					Protocl Buffers
+--------------------------------------------------------------------------
+float64				double
+float32				float
+int32				int32
+int64				int64
+bool				bool
+string				string
+time.Time			google.protobuf.Timestamp
+slice				型の前にrepeatedを追加
+//}
+
+
+time.TimeはProtocol Buffersの標準で規定されていないのでgoogleが作成した`google/protobuf/timestamp.proto` のimportが必要になります。
+
+また `github.com/golang/protobuf/ptypes` にTimestampに関連するメソッドがあります。
+現在時刻の取得をする `func TimestampNow() *tspb.Timestamp ` 、Goの `time.Time` から `Timestamp` に変換する `func TimestampProto(t time.Time) (*tspb.Timestamp, error)` などがあります。
+
+
+== 技術選定
+
+この章では、Protocol Buffersと比較対象となる技術スタックを紹介します。
+
+周辺技術としてHTTP, GRPC, REST, XML, JSON, JSON-RPCなどがありますが、これらは単純比較できるものではありません。
+比較する際には、同じレイヤー技術間での比較をする必要があります。
+この理解を誤ると「Protocol Buffersを利用するためにはGRPCを利用しなければならない」のような誤解をしてしまいます。
+
+まず周辺技術がどのような要素を持ち、何を規定しているのかを整理します。
+
+=== 構成要素と規定している仕様
+
+	* ◎はそのプロトコルが規定している対象。
+	* ○はそのプロトコルが使うことを定めている他のプロトコル。
+	* ×はそのプロトコルが規定せず、自由に変更可能なプロトコル。
+
+//table[identifier][構成要素と規定している仕様]{
+.					HTTP	GRPC						REST					JSON-RPC				XML		JSON	Protocol Buffers
+-----------------------------------------------------------------------------------------------------------------------------------------
+通信プロトコル		◎		○(HTTP2)					○(HTTP)					×(HTTPがよく使われる)	×		×		×
+API実行ルール		×		◎							◎						◎						×		×		×
+構造化データ仕様	×		×(標準がProtocol Buffers)	×(JSONがよく使われる)	○(JSON)					◎		◎		◎
+//}
+
+
+=== 選定対象となる技術の整理
+
+==== 通信プロトコル
+HTTP/HTTP2, その他プロトコルから選定することができます。現時点ではWebサービスを作る上ではほとんどがHTTP/HTTP2となります。
+将来的にはTCP+HTTP2からUDP+QUIC+HTTP2への移行も考えられますが、クラウドを利用している限りあまり意識することはないでしょう。
+
+==== API実行ルール
+REST、JSON-RPC、GRPCなどから選定します。
+
+==== 構造化データ仕様
+XML、JSON、Protocol Buffersなどから選定します。
+
+Protocol BuffersはGRPCの標準として採用されていますが、API実行ルールがGRPCでなければいけないということはありません。
+そのためGRPCが利用できないGoogle App EngineでHTTP+Protocol Buffersを採用することも可能です。
+
+またHTTP+JSON-RPCという環境からHTTPはそのままにProtocol Buffersを利用することが可能です。
+その場合にはJSON-RPCのJSON部分をProtocol Buffersに置き換えますが、RPCのAPI実行ルール部はそのまま利用することになります。つまりHTTP+JSON-RPCのRPC部+Protocol Buffersという構成になります。
+
+=== Goのインフラとの相性
+
+Goを採用する企業では、主にGoogle Container Engine(GKE)、Google App Engine(GAE)、Amazon EC2を利用している方が多いと思います。
+Protocol Buffersはインフラに制限されることはありません。
+
+
+== まとめ
+Protocol Buffersは、構造化データ仕様を定めているものであり様々な通信プロトコルやAPI実行ルールと組み合わせて利用することができます。
+JSONの課題を解決しており、Protocol Buffersの導入障壁も低いため新規プロジェクトを始められる際には是非候補にして頂ければと思います。
+より技術的なチャレンジが可能であればGRPCにも挑戦してみてください。
+
+みなさんが技術選定する際に少しでもお役に立てれば幸いです。
+
+== TIPS
+
+私たちが採用しているAPI(Go)、iOS(Swift)、Andoird(Kotlin)、Web(TypeScript)のProtocol Buffersの環境構築手順とprotoファイルのTIPSを紹介します。
+
+=== 開発環境構築
+
+//table[identifier][環境]{
+環境			開発言語		protoファイルからのソースコード生成ツール
+--------------------------------------------------------------------------
+サーバサイド	Go				https://github.com/golang/protobuf/protoc-gen-go
+iOS				Swift			https://github.com/apple/swift-protobuf
+Andoird			Kotlin			https://github.com/square/wire
+Web				TypeScript		https://github.com/dcodeIO/ProtoBuf.js
+//}
+
+
+=== Mac環境構築、実行
+
+==== 共通
+
+//list[protobuf_install][Protocol Buffersのインストール]{
+brew install protobuf
+//}
+
+==== Go
+
+//list[go_install][Goのインストール]{
+go get -u github.com/golang/protobuf/protoc-gen-go
+//}
+
+//list[protoc_go][.protoから.goを生成]{
+protoc --go_out=. *.proto
+//}
+
+==== Swift
+
+XCodeをインストールしておく。
+
+//list[swift_protoc_install][Swift関連ツールのインストール]{
+git clone https://github.com/apple/swift-protobuf
+cd swift-protobuf
+swift build -c release -Xswiftc -static-stdlib
+# 生成されたprotoc-gen-swiftをパスが通る場所に移動
+//}
+
+//list[protoc_swift][.protoから.goを生成]{
+protoc --swift_out=. *.proto
+//}
+
+==== Kotlin(Java)公式
+
+生成されるのはJavaコードです。
+protocコマンドが標準で対応しています。
+
+//list[protoc_java][.protoから.javaを生成]{
+protoc --java_out=. *.proto
+//}
+
+
+==== Kotlin(Java) square/wireの利用
+
+生成されるのはJavaコードです。
+公式のprotocコマンドが生成するJavaのサイズがとても大きいという問題があるので3rd Party製のsquare/wireを使うことで解決します。
+
+Javaをインストールしておく。
+
+wireをインストール。
+https://search.maven.org/remote_content?g=com.squareup.wire&a=wire-compiler&c=jar-with-dependencies&v=LATEST
+
+//list[protoc_java_by_wire][.protoから.javaを生成]{
+java -jar wire-compiler-2.3.0-RC1-jar-with-dependencies.jar --proto_path=. --android --java_out=. *.proto
+//}
+
+==== TypeScript
+
+//list[ts_protoc_install][TypeScript関連ツールのインストール]{
+npm install protobufjs
+export PATH=${PATH}:${HOME}/node_modules/.bin
+//}
+
+//list[protoc_typescript][.protoから.tsを生成]{
+pbjs -t static-module *.proto | pbts -o proto.d.ts -
+//}
+
+
+=== protoファイルのTIPS
+
+==== protoファイルにpackageを設定する
+
+packageを設定すると生成されるGoのソースコードも同様のpackageになります。
+packageを設定しない場合にはファイル名がパッケージ名になります。
+
+//list[person_proto1][packageの指定]{
+syntax = "proto3";
+
+package person;
+
+message Person {
+  required string name = 1;
+  required int32 id = 2;
+  optional string email = 3;
+}
+//}
+
+==== protoファイルにpackageを指定しつつ、生成するコードは別パッケージ名にする
+生成されるソースコードのパッケージ名をprotoファイルとは別に指定したい場合には以下のようにprotoファイルに設定します。
+
+//list[person_proto2][packageの制御]{
+syntax = "proto3";
+option go_package = "pb";
+option java_package = "pb";
+
+package person;
+
+message Person {
+  required string name = 1;
+  required int32 id = 2;
+  optional string email = 3;
+}
+//}
+
+==== protoファイルにpackageを指定した場合に、Swfitのソースコードに追加される余計なPrefixを削除する。
+
+//list[person_proto3][swiftのprefixを削除]{
+syntax = "proto3";
+option swift_prefix="";
+
+package person;
+
+message Person {
+  required string name = 1;
+  required int32 id = 2;
+  optional string email = 3;
+}
+//}
