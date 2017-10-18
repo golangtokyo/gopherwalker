@@ -3,26 +3,30 @@
 == はじめに
 ピックアップ株式会社で新規事業のサーバイサイドエンジニアをしている@sonatardです。
 
-先日、新規事業を始める関係でいくつかの技術スタックの選定を行いましたので、
-今回はその中でもクライアントとサーバ間でやりとりする構造化データの仕様として規定されているProtocol Buffersと周辺技術について紹介します。
+新規事業を始める際には様々な技術スタックの選定が必要になります。
+今回はその中でもクライアントとサーバ間でやりとりする構造化データ仕様のProtocol Buffersと周辺技術について紹介します。
+
+この章では4つの点をお伝えできればと思います。
+
+	* GoでProtocol Buffersの採用は容易である
+	* JSONからの移行は容易である
+	* gRPCのメリットとして紹介される内容の一部はProtocol Buffersによるものである
+	* gRPCを使わなくともProtocol Buffersだけを採用することが可能である
 
 == Protocol Buffersの概要
 
 === Protocol Buffersとは
 
 Protocol Buffersは、言語とプラットフォームに依存しない構造化されたデータをシリアライズするためのものです。
-XMLはより小さく、より速く、よりシンプルです。データを一度に構造化する方法を定義してから、特別に生成されたソースコードを使用して、
-様々なデータストリームとさまざまな言語を使用して構造化データを簡単に書き込んで読み込むことができます。
-
-Protocol Buffersは .proto という拡張子のファイルに所定の書式でデータ構造を規定することができます。
-protocコマンドにより `.proto` ファイルから各言語のソースコードを生成します。
-iOS、Andoird、Webはこれらの自動生成されたソースコードを組み込んで開発をします。
+テキストフォーマットのXMLやJSONより小さく、速く、そしてシンプルです。.protoファイルにデータを構造化する方法を定義してから、
+特別に生成されたソースコードを使用して、様々な言語で構造化データを簡単に読み書きすることができます。
 
 === メリット
+
 ==== 開発効率
 最大のメリットはクライアントとサーバの間で言語に依存せずコンパイルが可能になることです。
 JSONを利用する場合はサーバの提供するAPI仕様をドキュメントから理解して、クライアントエンジニアが正しく実装しなければなりません。
-もし間違った実装をしても実際にリクエストを送信して結果を見ないことには正しさを検証することができません。
+もし間違った実装をしても実際にリクエストを送信して結果を確認しないことは検証することができません。
 しかしProtocol Buffersではprotoファイルという共通仕様からクライアントとサーバのコードを生成し、それを利用することでコンパイル時にバグを発見することができます。
 
 またソースコードが生成されることで、各言語のIDEやエディタにより補完が効くようになるため開発効率が向上します。
@@ -31,6 +35,7 @@ JSONを利用する場合はサーバの提供するAPI仕様をドキュメン�
 バイナリフォーマットであるため通信経路上を流れるデータサイズが小さくなり、スループットが向上します。
 またJSONなどのテキストのフォーマットと比較して、バイナリフォーマットであるProtocol Buffersはエンコード、デコードの処理が高速です。
 
+
 === デメリット
 ==== 環境構築
 言語ごとに環境構築が必要です。
@@ -38,19 +43,16 @@ JSONを利用する場合はサーバの提供するAPI仕様をドキュメン�
 しかし難しいことではないためデメリットというほどのことでもありません。
 
 ==== デバッグ
-バイナリフォーマットであるため、JSONのように気軽にcurlコマンドでPOSTを投げるようなことができません。
-サーバ側で工夫してJSONもデコードできるようにしておくと従来通りの開発が可能です。
-
-私たちはPostmanを利用してAPIを実行できる環境をクライアントエンジニアと共有しているため、
-サーバでHTTPヘッダのContent-TypeからJSONかProtocol Buffersかを判断してデコードするようにしています。
-GRPCを利用していればgrpc-gatewayを使う解決策もあります。
+バイナリフォーマットであるためJSONのようにそのままHTTPリクエストのBodyに乗せて送信することができません。
+サーバでHTTPヘッダのContent-TypeからJSONかProtocol Buffersかを判断してデコードするようしておくと開発時のストレスがなくなります。
+gRPCを利用していればgrpc-gatewayを使う解決策もあります。
 
 
 === Protocol Buffersを用いた開発
 
-続いて実際にGoでProtocol Buffersを利用した開発を紹介します。
+実際にProtocol Buffersを利用したGoの開発の例を紹介します。
 
-protoファイルを定義して、生成したコードをの構造体をGoから利用してする例を紹介します。
+==== protoファイルから生成したコードをGoから利用する
 
 //list[person.proto][protoファイルの例]{
 syntax = "proto3";
@@ -68,9 +70,9 @@ $ ls
 person.pb.go  person.proto
 //}
 
-生成された `person.pb.go` を利用してコードを書きます。
+生成された person.pb.go を利用してコードを書きます。
 
-//list[directory][サンプルディレクトリ構成]{
+//list[directory][ディレクトリ構成]{
 ${GOPATH}/github.com/sonatard/proto
 ├── Makefile
 ├── main
@@ -80,7 +82,7 @@ ${GOPATH}/github.com/sonatard/proto
 //}
 
 
-//list[main.go][生成されたperson.Personの利用]{
+//list[proto_main.go][生成されたperson.Person構造体の利用]{
 package main
 
 import (
@@ -98,14 +100,28 @@ func main() {
 }
 //}
 
-//list[person.proto_stdout][生成されたperson.Personの利用 実行結果]{
+//list[person.proto_stdout][生成されたperson.Personの構造体利用 実行結果]{
 person.Person{Name:"sonatard", Id:12345, Email:"sonatard@example.com"}
 //}
 
 
-続いてクライアント側でprotoファイルで定義した構造化データをエンコードしてHTTPで送信、サーバ側で受信してデコードをする例を紹介します。
+==== protoファイルで定義した構造化データをエンコードしてHTTPで送信、受信してデコード
 
-//list[main2.go][生成されたperson.Personのエンコードとデコード]{
+//list[proto_main2.go][生成されたperson.Personのエンコードとデコード]{
+package main
+
+import (
+    "bytes"
+    "fmt"
+    "io"
+    "io/ioutil"
+    "net/http"
+    "os"
+
+    "github.com/golang/protobuf/proto"
+    "github.com/sonatard/proto"
+)
+
 func main() {
 	// サーバ
 	handler := func(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +134,7 @@ func main() {
 		var p person.Person
 		err = proto.Unmarshal(body, &p)
 		if err != nil {
-			http.Error(w, "Failed to unmarshal body", http.StatusBadRequest)
+			http.Error(w, "Failed to unmarshal", http.StatusBadRequest)
 		}
 		fmt.Fprintf(w, "#%v", p)
 	}
@@ -136,7 +152,8 @@ func main() {
 	if err != nil {
 		fmt.Errorf("%#v", err)
 	}
-	resp, err := http.Post("http://localhost:8080/", "application/x-protobuf", bytes.NewBuffer(pbytes))
+	resp, err := http.Post("http://localhost:8080/", "application/x-protobuf",
+	                      bytes.NewBuffer(pbytes))
 	if err != nil {
 		fmt.Errorf("%#v", err)
 	}
@@ -146,13 +163,12 @@ func main() {
 //}
 
 
-見ていただいた通りGoを書く上ではJSONとProtocolBuffersの違いは、
-構造体にjsonタグを指定するか、protoファイルから構造体を生成するという違いしかありません。
+このようにGoを書く上ではJSONとProtocolBuffersの違いは少なく、
+構造体にjsonタグを指定するか、protoファイルから構造体を生成するかという違いしかありません。
 
 === GoとProtocol Buffersの型の対応
 
-Goの型とProtocol Buffersの型の名称が異なります。
-代表的な型の対応を紹介します。
+GoとProtocol Buffersの型は名称が異なります。
 
 //table[identifier][GoとProtocol Buffersの型の対応]{
 Go					Protocl Buffers
@@ -168,21 +184,18 @@ slice				型の前にrepeatedを追加
 //}
 
 
-time.TimeはProtocol Buffersの標準で規定されていないのでgoogleが作成した`google/protobuf/timestamp.proto` のimportが必要になります。
-
-また `github.com/golang/protobuf/ptypes` にTimestampに関連するメソッドがあります。
-現在時刻の取得をする `func TimestampNow() *tspb.Timestamp ` 、Goの `time.Time` から `Timestamp` に変換する `func TimestampProto(t time.Time) (*tspb.Timestamp, error)` などがあります。
+time.TimeはProtocol Buffersの標準で規定されていないためgoogleが作成した google/protobuf/timestamp.proto のインポートが必要になります。
+また github.com/golang/protobuf/ptypes にTimestampに関連する関数が用意されています。
+現在時刻の取得をする func TimestampNow() *tspb.Timestamp 、Goの time.Time から Timestamp に変換する func TimestampProto(t time.Time) (*tspb.Timestamp, error) などがあります。
 
 
 == 技術選定
 
 この章では、Protocol Buffersと比較対象となる技術スタックを紹介します。
-
-周辺技術としてHTTP, GRPC, REST, XML, JSON, JSON-RPCなどがありますが、これらは単純比較できるものではありません。
-比較する際には、同じレイヤー技術間での比較をする必要があります。
-この理解を誤ると「Protocol Buffersを利用するためにはGRPCを利用しなければならない」のような誤解をしてしまいます。
-
-まず周辺技術がどのような要素を持ち、何を規定しているのかを整理します。
+周辺技術としてHTTP, gRPC, REST, XML, JSON, JSON-RPCなどがありますが、これらは単純比較できるものではありません。
+正しく比較検討するためには、同じレイヤー技術間での比較が必要です。
+比較検討の対象を誤ると「Protocol Buffersを利用するためにはgRPCを利用しなければならない」のような誤解をしてしまいます。
+そこで周辺技術がどのような要素を持ち、何を規定しているのかを整理します。
 
 === 構成要素と規定している仕様
 
@@ -191,11 +204,15 @@ time.TimeはProtocol Buffersの標準で規定されていないのでgoogleが�
 	* ×はそのプロトコルが規定せず、自由に変更可能なプロトコル。
 
 //table[identifier][構成要素と規定している仕様]{
-.					HTTP	GRPC						REST					JSON-RPC				XML		JSON	Protocol Buffers
------------------------------------------------------------------------------------------------------------------------------------------
-通信プロトコル		◎		○(HTTP2)					○(HTTP)					×(HTTPがよく使われる)	×		×		×
-API実行ルール		×		◎							◎						◎						×		×		×
-構造化データ仕様	×		×(標準がProtocol Buffers)	×(JSONがよく使われる)	○(JSON)					◎		◎		◎
+.					通信プロトコル		API実行ルール	構造化データ仕様
+------------------------------------------------------------------------------------
+HTTP				◎					×				×
+gRPC				○(HTTP2)			◎				×(標準がProtocol Buffers)
+JSON-RPC			×(HTTPをよく使う)	◎				○(JSON)
+REST				○(HTTP)				◎				×(JSONをよく使う)
+XML					×					×				◎
+JSON				×					×				◎
+Protocol Buffers	×					×				◎
 //}
 
 
@@ -205,34 +222,37 @@ API実行ルール		×		◎							◎						◎						×		×		×
 HTTP/HTTP2, その他プロトコルから選定することができます。現時点ではWebサービスを作る上ではほとんどがHTTP/HTTP2となります。
 将来的にはTCP+HTTP2からUDP+QUIC+HTTP2への移行も考えられますが、クラウドを利用している限りあまり意識することはないでしょう。
 
+選定基準は、インフラが対応しているか、性能、機能面に不足がないかなどになります。
+
 ==== API実行ルール
-REST、JSON-RPC、GRPCなどから選定します。
+REST、JSON-RPC、gRPCなどから選定します。
+
+選定基準は、インフラが対応しているか、URL設計に合うか、性能、機能面に不足がないか、開発言語のライブラリが揃っているかなどになります。
 
 ==== 構造化データ仕様
 XML、JSON、Protocol Buffersなどから選定します。
-
-Protocol BuffersはGRPCの標準として採用されていますが、API実行ルールがGRPCでなければいけないということはありません。
-そのためGRPCが利用できないGoogle App EngineでHTTP+Protocol Buffersを採用することも可能です。
-
+Protocol BuffersはgRPCの標準として採用されていますが、API実行ルールがgRPCである必要はありません。
+そのためgRPCが利用できないGoogle App EngineでHTTP+Protocol Buffersを採用することも可能です。
 またHTTP+JSON-RPCという環境からHTTPはそのままにProtocol Buffersを利用することが可能です。
 その場合にはJSON-RPCのJSON部分をProtocol Buffersに置き換えますが、RPCのAPI実行ルール部はそのまま利用することになります。つまりHTTP+JSON-RPCのRPC部+Protocol Buffersという構成になります。
 
-=== Goのインフラとの相性
+選定基準は、性能、機能面に不足がないか、開発言語のライブラリが揃っているかなどになります。
 
-Goを採用する企業では、主にGoogle Container Engine(GKE)、Google App Engine(GAE)、Amazon EC2を利用している方が多いと思います。
-Protocol Buffersはインフラに制限されることはありません。
+=== インフラによる制限
+
+Goを採用する企業では、主にGoogle Container Engine、Google App Engine、Amazon EC2を利用している方が多いと思いますが、
+Protocol Buffersはインフラに制限されることはないためすべての環境で利用できます。
 
 
-== まとめ
+== おわりに
 Protocol Buffersは、構造化データ仕様を定めているものであり様々な通信プロトコルやAPI実行ルールと組み合わせて利用することができます。
-JSONの課題を解決しており、Protocol Buffersの導入障壁も低いため新規プロジェクトを始められる際には是非候補にして頂ければと思います。
-より技術的なチャレンジが可能であればGRPCにも挑戦してみてください。
-
+JSONの課題を解決しており、Protocol Buffersの導入障壁も低いため新規プロジェクトを始める際には是非候補にして頂ければと思います。
+インフラの制限がなく、より技術的なチャレンジが可能であればgRPCにも挑戦してみてください。
 みなさんが技術選定する際に少しでもお役に立てれば幸いです。
 
 == TIPS
 
-私たちが採用しているAPI(Go)、iOS(Swift)、Andoird(Kotlin)、Web(TypeScript)のProtocol Buffersの環境構築手順とprotoファイルのTIPSを紹介します。
+私たちが採用しているAPI(Go)、iOS(Swift)、Andoird(Kotlin)、Web(TypeScript)のProtocol Buffersの環境構築手順と開発している中で知ったprotoファイルのTIPSを紹介します。
 
 === 開発環境構築
 
@@ -292,7 +312,7 @@ protoc --java_out=. *.proto
 ==== Kotlin(Java) square/wireの利用
 
 生成されるのはJavaコードです。
-公式のprotocコマンドが生成するJavaのサイズがとても大きいという問題があるので3rd Party製のsquare/wireを使うことで解決します。
+公式のprotocコマンドが生成するJavaのソースコードサイズがとても大きいという問題があるためsquare/wireを使うことで解決します。
 
 Javaをインストールしておく。
 
@@ -335,7 +355,7 @@ message Person {
 //}
 
 ==== protoファイルにpackageを指定しつつ、生成するコードは別パッケージ名にする
-生成されるソースコードのパッケージ名をprotoファイルとは別に指定したい場合には以下のようにprotoファイルに設定します。
+生成されるソースコードのパッケージ名をprotoファイルとは別に指定する場合には@<list>{person_proto2}のようにprotoファイルに設定します。
 
 //list[person_proto2][packageの制御]{
 syntax = "proto3";
