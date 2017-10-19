@@ -193,8 +193,8 @@ slice				型の前にrepeatedを追加
 
 本章では、Protocol Buffersと比較対象となる技術スタックを紹介します。
 周辺技術としてHTTP, gRPC, REST, XML, JSON, JSON-RPCなどがありますが、これらは単純比較できるものではありません。
-正しく比較検討するためには、同じレイヤー技術間での比較が必要です。
-比較検討の対象を誤ると「Protocol Buffersを利用するためにはgRPCを利用しなければならない」のような誤解をしてしまいます。
+正しく比較検討するためには、同じレイヤーの技術間で比較しなければなりません。
+比較検討の対象を誤ると「Protocol Buffersを利用するためにはgRPCを利用しなければならない」というような誤解をしてしまいます。
 そこで周辺技術がどのような要素を持ち、何を規定しているのかを整理します。
 
 === 構成要素と規定している仕様
@@ -340,7 +340,7 @@ pbjs -t static-module *.proto | pbts -o proto.d.ts -
 
 ==== protoファイルにpackageを設定する
 
-packageを設定すると生成されるGoのソースコードも同様のpackageになります。
+パッケージを設定すると生成されるGoのソースコードも同様のpackageになります。
 packageを設定しない場合にはファイル名がパッケージ名になります。
 
 //list[person_proto1][packageの指定]{
@@ -372,7 +372,7 @@ message Person {
 }
 //}
 
-==== protoファイルにpackageを指定した場合に、Swfitのソースコードに追加される余計なPrefixを削除する。
+==== protoファイルにパッケージを指定した場合に、Swiftのソースコードに追加される余計なプレフィックスを削除する。
 
 //list[person_proto3][swiftのprefixを削除]{
 syntax = "proto3";
