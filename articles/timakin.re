@@ -2,7 +2,8 @@
 
 == はじめに
 
-株式会社Gunosy新規事業開発室エンジニアのtimakinです。Gunosyでは主にGoのAPIとSwiftのiOSクライアントサイド開発を担当しております。
+株式会社Gunosy新規事業開発室エンジニアのtimakin@<fn>{timakin_fn1}です。Gunosyでは主にGoのAPIとSwiftのiOSクライアントサイド開発を担当しております。
+//footnote[timakin_fn1][https://twitter.com/__timakin__]
 
 起動直後に特にユーザの認証を必要としないモバイルアプリは多く存在しています。
 しかし、裏側ではデバイス認証をしておき、正確にユーザ情報を管理しなくてはならない場合があります。
@@ -510,7 +511,7 @@ func (s service) Init(ctx context.Context, u *User) (*User, bool, string, error)
 }
 //}
 
-@<code>{Init}という必要の関数の中で@<code>{User}, @<code>{Device}, @<code>{DeviceApp}を登録していきます。ここではGoogle Cloud PlatformのDatastoreをデータベースとして利用しているので、@<code>{RunInTransaction}という関数でトランザクションを張っています。
+@<code>{Init}という関数の中で@<code>{User}、@<code>{Device}、@<code>{DeviceApp}を登録していきます。ここではGoogle Cloud PlatformのDatastoreをデータベースとして利用しているので、@<code>{RunInTransaction}という関数でトランザクションを張っています。
 不恰好かもしれませんが、認証処理のように複数のテーブルを一挙に参照するような場面では、必ずトランザクションを張るべきです。
 
 また、ここでは省略していますが、バージョン番号が古すぎる場合は強制アップデートフラグをつけるなどの処理もここで必要になってくるでしょう。
