@@ -1,7 +1,9 @@
 = Protocol Buffers
 
 == はじめに
-ピックアップ株式会社で新規事業のサーバイサイドエンジニアをしている@sonatardです。
+ピックアップ株式会社で新規事業のサーバイサイドエンジニアをしている@sonatard@<fn>{sonatard_fn1}です。
+
+//footnote[sonatard_fn1][@<href>{https://twitter.com/sonatard}]
 
 新規事業を始める際には様々な技術スタックの選定が必要になります。
 本章ではその中でもクライアントとサーバ間でやりとりする構造化データ仕様のProtocol Buffersと周辺技術について紹介します。
@@ -171,28 +173,28 @@ func main() {
 GoとProtocol Buffersの型は名称が異なります。
 
 //table[identifier][GoとProtocol Buffersの型の対応]{
-Go					Protocl Buffers
+Go	Protocl Buffers
 --------------------------------------------------------------------------
-float64				double
-float32				float
-int32				int32
-int64				int64
-bool				bool
-string				string
-time.Time			google.protobuf.Timestamp
-slice				型の前にrepeatedを追加
+float64	double
+float32	float
+int32	int32
+int64	int64
+bool	bool
+string	string
+time.Time	google.protobuf.Timestamp
+slice	型の前にrepeatedを追加
 //}
 
 
 @<code>{time.Time}はProtocol Buffersの標準で規定されていないためGoogleが作成した@<code>{google/protobuf/timestamp.proto}のインポートが必要になります。
 また@<code>{github.com/golang/protobuf/ptypes}にタイムスタンプに関連する関数が用意されています。
-現在時刻の取得をする@<code>{func TimestampNow() *tspb.Timestamp}、Goの @<code>{time.Time}から@<code>{Timestamp}に変換する@<code>{func TimestampProto(t time.Time) (*tspb.Timestamp, error)}などがあります。
+現在時刻の取得をする@<code>{func TimestampNow() *tspb.Timestamp}、Goの@<code>{time.Time}から@<code>{Timestamp}に変換する@<code>{func TimestampProto(t time.Time) (*tspb.Timestamp, error)}などがあります。
 
 
 == 技術選定
 
 本章では、Protocol Buffersと比較対象となる技術スタックを紹介します。
-周辺技術としてHTTP, gRPC, REST, XML, JSON, JSON-RPCなどがありますが、これらは単純比較できるものではありません。
+周辺技術としてHTTP、gRPC、REST、XML、JSON、JSON-RPCなどがありますが、これらは単純比較できるものではありません。
 正しく比較検討するためには、同じレイヤーの技術間で比較しなければなりません。
 比較検討の対象を誤ると「Protocol Buffersを利用するためにはgRPCを利用しなければならない」というような誤解をしてしまいます。
 そこで周辺技術がどのような要素を持ち、何を規定しているのかを整理します。
