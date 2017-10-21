@@ -311,7 +311,7 @@ func GetUsersFromDB() []*User {
 
 たとえば@<list>{pospome_list15}のように@<code>{GetAdminUsersFromDB}という関数を別に用意したとします。
 
-//list[pospome_list15][GetAdminUsersFromDB関数を別に容易した場合]{
+//list[pospome_list15][GetAdminUsersFromDB関数を別に用意した場合]{
 func GetUsersFromDB() []*User {
     //省略
 }
@@ -343,7 +343,7 @@ func FilterAdminUsers(u []*User) []*User{
 }
 //}
 
-前述のように関数として実装する方法の他に、@<code>{pospome_list18}のように型を新しく定義し、
+前述のように関数として実装する方法の他に、@<list>{pospome_list18}のように型を新しく定義し、
 そこにメソッドとして実装する方法もあります。
 
 //list[pospome_list18][抽出する処理をメソッドとして定義する方法]{
