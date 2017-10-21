@@ -3,7 +3,8 @@
 == はじめに
 
 株式会社Gunosy新規事業開発室エンジニアのtimakin@<fn>{timakin_fn1}です。Gunosyでは主にGoのAPIとSwiftのiOSクライアントサイド開発を担当しております。
-//footnote[timakin_fn1][https://twitter.com/__timakin__]
+
+//footnote[timakin_fn1][@<href>{https://twitter.com/__timakin__}]
 
 起動直後に特にユーザの認証を必要としないモバイルアプリは多く存在しています。
 しかし、裏側ではデバイス認証をしておき、正確にユーザ情報を管理しなくてはならない場合があります。
