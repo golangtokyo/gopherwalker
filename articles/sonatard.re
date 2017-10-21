@@ -46,7 +46,7 @@ JSONを利用する場合はサーバの提供するAPI仕様をドキュメン�
 
 ==== デバッグ
 バイナリフォーマットであるためJSONのようにそのままHTTPリクエストのボディに乗せて送信することができません。
-サーバでHTTPヘッダの@<code>{Content-Type}からJSONかProtocol Buffersかを判断してデコードするようしておくと開発時のストレスがなくなります。
+サーバでHTTPヘッダの@<code>{Content-Type}からJSONかProtocol Buffersかを判断してデコードするようにしておくと開発時のストレスがなくなります。
 gRPCを利用していれば@<code>{grpc-gateway}を使う解決策もあります。
 
 
@@ -289,7 +289,7 @@ protoc --go_out=. *.proto
 
 ==== Swift
 
-XCodeをインストールしておく。
+XCodeをインストールします。
 
 //list[swift_protoc_install][Swift関連ツールのインストール]{
 git clone https://github.com/apple/swift-protobuf
@@ -317,13 +317,14 @@ protoc --java_out=. *.proto
 生成されるのはJavaコードです。
 公式のprotocコマンドが生成するJavaのソースコードサイズがとても大きいという問題があるためsquare/wireを使うことで解決します。
 
-Javaをインストールしておく。
+Javaをインストールします。
 
 wireをインストール。
 https://search.maven.org/remote_content?g=com.squareup.wire&a=wire-compiler&c=jar-with-dependencies&v=LATEST
 
 //list[protoc_java_by_wire][.protoから.javaを生成]{
-java -jar wire-compiler-2.3.0-RC1-jar-with-dependencies.jar --proto_path=. --android --java_out=. *.proto
+java -jar wire-compiler-2.3.0-RC1-jar-with-dependencies.jar \
+     --proto_path=. --java_out=. *.proto
 //}
 
 ==== TypeScript
@@ -340,12 +341,12 @@ pbjs -t static-module *.proto | pbts -o proto.d.ts -
 
 === protoファイルのTIPS
 
-==== protoファイルにpackageを設定する
+==== protoファイルにパッケージを設定する
 
-パッケージを設定すると生成されるGoのソースコードも同様のpackageになります。
-packageを設定しない場合にはファイル名がパッケージ名になります。
+パッケージを設定すると生成されるGoのソースコードも同様のパッケージになります。
+パッケージを設定しない場合にはファイル名がパッケージ名になります。
 
-//list[person_proto1][packageの指定]{
+//list[person_proto1][パッケージの指定]{
 syntax = "proto3";
 
 package person;
@@ -357,10 +358,10 @@ message Person {
 }
 //}
 
-==== protoファイルにpackageを指定しつつ、生成するコードは別パッケージ名にする
+==== protoファイルにパッケージを指定しつつ、生成するコードは別パッケージ名にする
 生成されるソースコードのパッケージ名をprotoファイルとは別に指定する場合には@<list>{person_proto2}のようにprotoファイルに設定します。
 
-//list[person_proto2][packageの制御]{
+//list[person_proto2][パッケージの制御]{
 syntax = "proto3";
 option go_package = "pb";
 option java_package = "pb";
@@ -376,7 +377,7 @@ message Person {
 
 ==== protoファイルにパッケージを指定した場合に、Swiftのソースコードに追加される余計なプレフィックスを削除する。
 
-//list[person_proto3][swiftのprefixを削除]{
+//list[person_proto3][swiftのプレフィックスを削除]{
 syntax = "proto3";
 option swift_prefix="";
 
