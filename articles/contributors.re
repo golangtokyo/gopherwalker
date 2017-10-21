@@ -11,3 +11,6 @@
 ==== Protocol Buffers / @sonatard @そなた
 
 ピックアップ株式会社所属。新規事業のサーバサイドエンジニア。golang.tokyoの運営に参加。新卒で入社したメーカーでC言語によるTCP/IPプロトコルスタックを開発。ghqにSubversion対応のPull Requestを送りGoデビュー。C言語プログラマから脱出する道をGoに見出し今に至る。
+
+==== 新しく型を定義することによって可能になる実装パターン / @pospome
+TODO

@@ -324,7 +324,7 @@ func GetAdminUsersFromDB() []*User {
 そして、@<list>{pospome_list16}のように、@<code>{GetUsersFromDB}関数と@<code>{GetAdminUsersFromDB}}関数をそれぞれ実行します。
 こうすることで、"一覧表示に必要なユーザ"と"管理者権限を持ったユーザ"をそれぞれ取得することができます。
 
-//list[pospome_list17][管理者権限を持ったユーザを別に取得する例]{
+//list[pospome_list16][管理者権限を持ったユーザを別に取得する例]{
 users := GetUsersFromDB()
 adminUsers := GetAdminUsersFromDB()
 //}
@@ -334,19 +334,19 @@ adminUsers := GetAdminUsersFromDB()
 そのため、わざわざ再度データベースにアクセスして、管理者権限を持ったユーザを取得する必要はありません。
 最初に取得したユーザから管理者権限を持ったユーザを抽出する方が効率的な実装になります。
 
-スライスをそのまま扱うのであれば、@<list>{pospome_list18}のように、
+スライスをそのまま扱うのであれば、@<list>{pospome_list17}のように、
 フィルタリング用の関数を実装することで抽出することになるでしょう。
 
-//list[pospome_list18][フィルタリング用の関数]{
+//list[pospome_list17][フィルタリング用の関数]{
 func FilterAdminUsers(u []*User) []*User{
     //省略
 }
 //}
 
-前述のように関数として実装する方法の他に、@<code>{pospome_list19}のように型を新しく定義し、
+前述のように関数として実装する方法の他に、@<code>{pospome_list18}のように型を新しく定義し、
 そこにメソッドとして実装する方法もあります。
 
-//list[pospome_list19][抽出する処理をメソッドとして定義する方法]{
+//list[pospome_list18][抽出する処理をメソッドとして定義する方法]{
 type Users []*User
 
 func (u Users) FilterAdmin() Users {
@@ -355,20 +355,20 @@ func (u Users) FilterAdmin() Users {
 //}
 
 さらに、前述した@<code>{GetUsersFromDB}から
-@<list>{pospome_list20}のように、@<code>{[]*User}型ではなく、
+@<list>{pospome_list19}のように、@<code>{[]*User}型ではなく、
 @<code>{Users}型で値を返すようにします。
 
-//list[pospome_list20][GetUsersFromDB関数の戻り値をUsers型にした例]{
+//list[pospome_list19][GetUsersFromDB関数の戻り値をUsers型にした例]{
 func GetUsersFromDB() Users {
     //省略
 }
 //}
 
-こうすることで、 @<list>{pospome_list21}のように
+こうすることで、 @<list>{pospome_list20}のように
 @<code>{GetUsersFromDB}関数で取得したユーザのうち
 管理者権限を持つユーザだけを抽出できます。
 
-//list[pospome_list21][FilterAdminメソッドを使った例]{
+//list[pospome_list20][FilterAdminメソッドを使った例]{
 users := GetUsersFromDB()
 adminUsers := users.FilterAdmin()
 //}
@@ -378,9 +378,9 @@ adminUsers := users.FilterAdmin()
 こうすることで、同じような処理が重複して実装されてしまうことは少なくなるでしょう。
 
 また、型として具体性を持たせることができるため、"何のスライスなのか?"も明示することが可能です。
-たとえば、@<list>{pospome_list22}のように、通常のユーザと特殊なユーザのスライスをそれぞれ型として定義することができます。
+たとえば、@<list>{pospome_list21}のように、通常のユーザと特殊なユーザのスライスをそれぞれ型として定義することができます。
 
-//list[go]{
+//list[pospome_list21][型として何のスライスなのか明示した例]{
 //通常ユーザのスライス
 type UserList []*User
 
