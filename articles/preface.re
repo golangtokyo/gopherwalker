@@ -6,7 +6,7 @@
 golang.tokyoの運営メンバーは日頃の業務でGoを本格的に使用しています。
 そのため、各企業の実際のプロダクト開発で得た高いレベルのノウハウを1つの本に集めることができました。
 
-//footnote[preface_fn1]{https://golangtokyo.connpass.com}
+//footnote[preface_fn1]{https://golangtokyo.connpass.com]
 
 本書が読者のみなさんのGoによるプロダクト開発に活かして頂くことができれば幸いです。
 また、まだGoを業務で導入されてない方にとっては、導入のきっかけになればうれしい限りです。
