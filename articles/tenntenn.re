@@ -403,18 +403,6 @@ func testTempFile(t *testing.T) string {
 そして、テストヘルパーは@<code>{t.Helper}メソッドを用いることで、
 有用なエラーメッセージを表示することが可能になります。
 
-//list[tenntenn_list10][Helperメソッドを使った例]{
-func testTempFile(t *testing.T) string {
-    t.Helper()
-    tf := ioutil.TempFile("", "test")
-    if err != nil {
-        t.Fatal("err %s", err)
-    }
-    tf.Close()
-    return tf.Name()
-}
-//}
-
 == 一時的なエラーのハンドリング
 
 === エラーの種類によるハンドリング
