@@ -3,5 +3,6 @@ PREDEF:
 CHAPS:
   - tenntenn.re
   - timakin.re
+  - sonatard.re
 POSTDEF:
   - contributors.re
