@@ -1,7 +1,7 @@
 = Protocol Buffers
 
 == はじめに
-ピックアップ株式会社で新規事業のサーバイサイドエンジニアをしている@sonatard@<fn>{sonatard_fn1}です。
+ピックアップ株式会社で新規事業のサーバサイドエンジニアをしている@sonatard@<fn>{sonatard_fn1}です。
 
 //footnote[sonatard_fn1][@<href>{https://twitter.com/sonatard}]
 
